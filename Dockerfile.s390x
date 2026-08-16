@@ -1,0 +1,35 @@
+# Stage 1: Build the WAR using Java 11 (maven-war-plugin compatibility)
+FROM --platform=linux/s390x eclipse-temurin:11-jdk AS builder
+
+WORKDIR /build
+
+# Copy Maven wrapper and config first for layer caching
+COPY .mvn .mvn
+COPY mvnw .
+COPY pom.xml .
+RUN chmod +x mvnw && ./mvnw dependency:resolve -B
+
+# Copy source and build
+COPY src src
+RUN ./mvnw package -B -DskipTests
+
+# Stage 2: Runtime on Open Liberty with Java 17 (required by MicroProfile 7.1)
+FROM --platform=linux/s390x icr.io/appcafe/open-liberty:full-java17-openj9-ubi
+
+# Config
+COPY --chown=1001:0 src/main/liberty/config/server.xml /config/server.xml
+COPY --chown=1001:0 src/main/liberty/config/jvm.options /config/jvm.options
+
+# App - use wildcard to avoid hardcoding artifact name
+COPY --chown=1001:0 --from=builder /build/target/*.war /config/apps/
+
+# Logging vars
+ENV LOGGING_FORMAT=simple
+ENV ACCESS_LOGGING_ENABLED=false
+ENV TRACE_SPEC=*=info
+
+# Build SCC?
+ARG CREATE_OPENJ9_SCC=true
+ENV OPENJ9_SCC=${CREATE_OPENJ9_SCC}
+
+RUN configure.sh

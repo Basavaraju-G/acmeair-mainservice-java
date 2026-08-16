@@ -1,0 +1,5 @@
+{
+  "original_base_image": "open-liberty:full-java17-openj9",
+  "language": "Java",
+  "status": "analyzed"
+}
